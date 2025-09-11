@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import emailjs from "@emailjs/browser";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Mail,
   Phone,
@@ -84,44 +83,40 @@ const ContactContent: React.FC = () => {
   const [submitError, setSubmitError] = useState("");
   const [initError, setInitError] = useState("");
 
-  // EmailJS Configuration with debug logging
-  const EMAILJS_SERVICE_ID = "service_p0w0f6n"; // Hardcoded for testing
-  const EMAILJS_PUBLIC_KEY = "HQJF20MVyocoC0AVx"; // Hardcoded for testing
+  // EmailJS Configuration
+  const EMAILJS_SERVICE_ID = "service_p0w0f6n";
+  const EMAILJS_PUBLIC_KEY = "HQJF20MVyocoC0AVx";
+  const MAIN_TEMPLATE_ID = "template_dqwkghg"; // Contact Us template
+  const AUTO_REPLY_TEMPLATE_ID = "template_6j8w1z9"; // Auto reply template
 
   console.log("EmailJS Config:", {
     serviceId: EMAILJS_SERVICE_ID,
     publicKey: EMAILJS_PUBLIC_KEY ? "Set" : "Not Set",
+    mainTemplate: MAIN_TEMPLATE_ID,
+    autoReplyTemplate: AUTO_REPLY_TEMPLATE_ID,
   });
-
-  // Template IDs
-  const TEMPLATE_IDS = {
-    general: "template_dqwkghg",
-    support: "template_dqwkghg",
-    partnership: "template_dqwkghg",
-    feedback: "template_dqwkghg",
-    school: "template_dqwkghg",
-  };
-
-  const INTERNAL_TEMPLATE_ID = "template_dqwkghg";
 
   // Initialize EmailJS on component mount
   useEffect(() => {
-    try {
-      if (!EMAILJS_PUBLIC_KEY) {
-        setInitError("EmailJS public key is missing");
-        console.error("EmailJS public key is missing");
-        return;
-      }
+    const initializeEmailJS = async () => {
+      try {
+        if (!EMAILJS_PUBLIC_KEY) {
+          setInitError("EmailJS public key is missing");
+          console.error("EmailJS public key is missing");
+          return;
+        }
 
-      emailjs.init(EMAILJS_PUBLIC_KEY);
-      console.log(
-        "EmailJS initialized successfully with key:",
-        EMAILJS_PUBLIC_KEY
-      );
-    } catch (error) {
-      console.error("EmailJS initialization error:", error);
-      setInitError(`Failed to initialize email service: ${error}`);
-    }
+        // Import emailjs dynamically
+        const emailjs = await import("@emailjs/browser");
+        emailjs.init(EMAILJS_PUBLIC_KEY);
+        console.log("EmailJS initialized successfully");
+      } catch (error) {
+        console.error("EmailJS initialization error:", error);
+        setInitError(`Failed to initialize email service: ${error}`);
+      }
+    };
+
+    initializeEmailJS();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -139,38 +134,62 @@ const ContactContent: React.FC = () => {
     setSubmitError("");
 
     try {
+      // Import emailjs dynamically
+      const emailjs = await import("@emailjs/browser");
+
       const ticketId = Date.now().toString().slice(-6);
       const submissionTime = new Date().toLocaleString();
 
-      const templateParams = {
-        from_name: formData.name,
+      // Main email parameters (to your team) - Updated to match template variables
+      const mainTemplateParams = {
+        user_name: formData.name, // Changed from from_name to user_name
+        from_name: formData.name, // Keep both for compatibility
         from_email: formData.email,
         subject: formData.subject,
         message: formData.message,
-        inquiry_type:
-          formData.type.charAt(0).toUpperCase() + formData.type.slice(1),
-        submission_time: submissionTime,
-        ticket_id: ticketId,
-        priority: formData.type === "support" ? "High" : "Normal",
-        to_email: formData.email,
         reply_to: formData.email,
+        // Additional template variables based on your EmailJS template
+        title: formData.subject, // In case template uses 'title' instead of 'subject'
+        name: formData.name, // Some templates use just 'name'
+        email: formData.email, // Some templates use just 'email'
       };
 
-      console.log("Sending email with params:", templateParams);
+      console.log("Sending main email with params:", mainTemplateParams);
 
-      // Send email
-      const response = await emailjs.send(
+      // Send main email to your team
+      const mainEmailResponse = await emailjs.send(
         EMAILJS_SERVICE_ID,
-        TEMPLATE_IDS[formData.type as keyof typeof TEMPLATE_IDS] ||
-          TEMPLATE_IDS.general,
-        templateParams
+        MAIN_TEMPLATE_ID,
+        mainTemplateParams
       );
 
-      console.log("Email sent successfully:", response);
+      console.log("Main email sent successfully:", mainEmailResponse);
+
+      // Auto-reply parameters (to the user) - Updated to match auto-reply template
+      const autoReplyParams = {
+        to_email: formData.email,
+        user_name: formData.name,
+        name: formData.name, // Keep both for compatibility
+        from_name: formData.name, // In case auto-reply template uses this
+        email: formData.email, // In case template expects this
+        subject: `Thank you for contacting PrismWorlds`,
+      };
+
+      console.log("Sending auto-reply email with params:", autoReplyParams);
+
+      // Send auto-reply email to the user
+      const autoReplyResponse = await emailjs.send(
+        EMAILJS_SERVICE_ID,
+        AUTO_REPLY_TEMPLATE_ID,
+        autoReplyParams
+      );
+
+      console.log("Auto-reply sent successfully:", autoReplyResponse);
+
       setIsSubmitting(false);
       setIsSubmitted(true);
 
-      // Reset after 5 seconds
+      // Reset form after 5 seconds
       setTimeout(() => {
         setIsSubmitted(false);
         setFormData({
@@ -186,14 +205,42 @@ const ContactContent: React.FC = () => {
       setIsSubmitting(false);
 
       let errorMessage = "Failed to send message. ";
-      if (error instanceof Error) {
+
+      // Enhanced error handling
+      if (error && typeof error === "object") {
+        if ("status" in error) {
+          switch ((error as any).status) {
+            case 422:
+              errorMessage +=
+                "Template variable mismatch. The email template variables don't match the data being sent.";
+              break;
+            case 400:
+              errorMessage +=
+                "Invalid request data. Please check your form inputs.";
+              break;
+            case 401:
+              errorMessage +=
+                "Authentication failed. Please check EmailJS configuration.";
+              break;
+            case 404:
+              errorMessage += "Template not found. Please check template IDs.";
+              break;
+            default:
+              errorMessage += `Server error (${(error as any).status}): ${
+                (error as any).text || "Unknown error"
+              }`;
+          }
+        } else if ("text" in error) {
+          errorMessage += (error as any).text;
+        }
+      } else if (error instanceof Error) {
         errorMessage += error.message;
       } else {
         errorMessage += "Unknown error occurred";
       }
+
       errorMessage +=
         ". Please try again or contact us directly at support@neuralgo.com";
-
       setSubmitError(errorMessage);
     }
   };
@@ -207,6 +254,7 @@ const ContactContent: React.FC = () => {
       ...formData,
       [e.target.name]: e.target.value,
     });
+    // Clear any existing errors when user starts typing
     if (submitError) {
       setSubmitError("");
     }
@@ -217,28 +265,53 @@ const ContactContent: React.FC = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#091D23] to-[#774C3E] flex flex-col">
         <div className="flex-1 flex items-center justify-center p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="text-center"
-          >
-            <GlassCard className="p-8 max-w-md">
-              <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CheckCircle className="h-8 w-8 text-white" />
-              </div>
-              <h2 className="text-2xl font-bold text-white mb-2">
-                Message Sent Successfully!
-              </h2>
-              <p className="text-white/70 mb-4">
-                Thank you for reaching out. We'll get back to you within 24
-                hours.
-              </p>
-              <p className="text-white/50 text-sm">
-                Check your email for a confirmation message with ticket ID.
-              </p>
-            </GlassCard>
-          </motion.div>
+          <AnimatePresence>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ duration: 0.5, ease: "easeOut" }}
+              className="text-center"
+            >
+              <GlassCard className="p-8 max-w-md">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: 0.2 }}
+                  className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4"
+                >
+                  <CheckCircle className="h-8 w-8 text-white" />
+                </motion.div>
+                <motion.h2
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className="text-2xl font-bold text-white mb-2"
+                >
+                  Message Sent Successfully!
+                </motion.h2>
+                <motion.p
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 }}
+                  className="text-white/70 mb-4"
+                >
+                  Thank you for reaching out. We'll get back to you within 24
+                  hours.
+                </motion.p>
+                <motion.p
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 }}
+                  className="text-white/50 text-sm"
+                >
+                  Check your email for a confirmation message.
+                </motion.p>
+              </GlassCard>
+            </motion.div>
+          </AnimatePresence>
         </div>
+
         <footer className="relative mt-auto">
           <div className="absolute top-4 right-4 text-white/20 text-xs font-light z-10">
             Created by Tamaterkun & EmitB0i
@@ -258,24 +331,79 @@ const ContactContent: React.FC = () => {
   // Main form
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#091D23] to-[#774C3E] flex flex-col">
+      <style jsx>{`
+        @keyframes fadeInScale {
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        @keyframes slideInLeft {
+          from {
+            opacity: 0;
+            transform: translateX(-30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+        @keyframes slideInRight {
+          from {
+            opacity: 0;
+            transform: translateX(30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+        @keyframes slideInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
       <div className="flex-1">
         <div className="container mx-auto px-4 py-12">
-          {/* Debug info (remove in production) */}
+          {/* Error Display */}
           {(initError || submitError) && (
             <div className="max-w-6xl mx-auto mb-4">
-              <div className="bg-yellow-500/20 border border-yellow-500/30 rounded-xl p-4">
-                <p className="text-yellow-200 text-sm">
-                  Debug Info: {initError || submitError}
-                </p>
+              <div className="bg-red-500/20 border border-red-500/30 rounded-xl p-4">
+                <div className="flex items-start space-x-3">
+                  <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-red-200 text-sm font-medium">
+                      {initError ? "Initialization Error" : "Submission Error"}
+                    </p>
+                    <p className="text-red-300 text-xs mt-1">
+                      {initError || submitError}
+                    </p>
+                    {submitError && (
+                      <button
+                        onClick={() => setSubmitError("")}
+                        className="text-red-400 hover:text-red-300 text-xs mt-2 underline"
+                      >
+                        Dismiss
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
           {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center mb-12"
+          <div
+            className="text-center mb-12 opacity-0"
+            style={{
+              animation: "slideInUp 0.8s ease-out forwards",
+            }}
           >
             <h1 className="text-4xl md:text-5xl font-bold text-white mb-6">
               Get in{" "}
@@ -287,15 +415,15 @@ const ContactContent: React.FC = () => {
               Have questions about PrismWorlds? Need support? Want to
               collaborate? We'd love to hear from you!
             </p>
-          </motion.div>
+          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
             {/* Contact Information */}
-            <motion.div
-              initial={{ opacity: 0, x: -30 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2 }}
-              className="space-y-6"
+            <div
+              className="space-y-6 opacity-0"
+              style={{
+                animation: "slideInLeft 0.8s ease-out 0.2s forwards",
+              }}
             >
               <GlassCard className="p-6">
                 <h3 className="text-xl font-bold text-white mb-6">
@@ -355,37 +483,21 @@ const ContactContent: React.FC = () => {
                   <li>• School integration assistance</li>
                 </ul>
               </GlassCard>
-            </motion.div>
+            </div>
 
             {/* Contact Form */}
-            <motion.div
-              initial={{ opacity: 0, x: 30 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.4 }}
-              className="lg:col-span-2"
+            <div
+              className="lg:col-span-2 opacity-0"
+              style={{
+                animation: "slideInRight 0.8s ease-out 0.4s forwards",
+              }}
             >
               <GlassCard className="p-8">
                 <h3 className="text-2xl font-bold text-white mb-6">
                   Send us a Message
                 </h3>
 
-                {submitError && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-red-500/20 border border-red-500/30 rounded-xl p-4 mb-6 flex items-start space-x-3"
-                  >
-                    <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-red-200 text-sm font-medium">
-                        Message Failed to Send
-                      </p>
-                      <p className="text-red-300 text-xs mt-1">{submitError}</p>
-                    </div>
-                  </motion.div>
-                )}
-
-                <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label className="block text-white/80 text-sm font-medium mb-2">
@@ -502,9 +614,10 @@ const ContactContent: React.FC = () => {
 
                   <button
                     type="submit"
-                    disabled={isSubmitting}
+                    onClick={handleSubmit}
+                    disabled={isSubmitting || !!initError}
                     className={`w-full flex items-center justify-center space-x-2 py-4 rounded-xl font-bold text-lg transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-[#E1664C] focus:ring-offset-2 focus:ring-offset-transparent ${
-                      isSubmitting
+                      isSubmitting || !!initError
                         ? "bg-gray-600 text-gray-400 cursor-not-allowed"
                         : "bg-gradient-to-r from-[#F8D991] to-[#F6B080] text-[#091D23] hover:shadow-2xl hover:shadow-[#F8D991]/25"
                     }`}
@@ -521,9 +634,9 @@ const ContactContent: React.FC = () => {
                       </>
                     )}
                   </button>
-                </form>
+                </div>
               </GlassCard>
-            </motion.div>
+            </div>
           </div>
         </div>
       </div>
