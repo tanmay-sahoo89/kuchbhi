@@ -1,17 +1,17 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Eye, EyeOff, Mail, Lock, User } from 'lucide-react';
-import GlassCard from './GlassCard';
+import React, { useState } from "react";
+import { motion } from "framer-motion";
+import { Eye, EyeOff, Mail, Lock, User } from "lucide-react";
+import GlassCard from "./GlassCard";
 
 interface LoginFormProps {
-  type: 'student' | 'teacher';
+  type: "student" | "teacher";
   onLogin: (email: string, password: string) => void;
   onClose: () => void;
 }
 
 const LoginForm: React.FC<LoginFormProps> = ({ type, onLogin, onClose }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -40,11 +40,9 @@ const LoginForm: React.FC<LoginFormProps> = ({ type, onLogin, onClose }) => {
               <User className="h-8 w-8 text-[#091D23]" />
             </div>
             <h2 className="text-2xl font-bold text-white mb-2">
-              {type === 'student' ? 'Student Login' : 'Teacher Login'}
+              {type === "student" ? "Student Login" : "Teacher Login"}
             </h2>
-            <p className="text-white/70">
-              Welcome back to PrismWorlds
-            </p>
+            <p className="text-white/70">Welcome back to PrismWorlds</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -72,7 +70,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ type, onLogin, onClose }) => {
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-white/50" />
                 <input
-                  type={showPassword ? 'text' : 'password'}
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-10 pr-12 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-[#E1664C] focus:border-transparent backdrop-blur-sm"
@@ -84,7 +82,11 @@ const LoginForm: React.FC<LoginFormProps> = ({ type, onLogin, onClose }) => {
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/50 hover:text-[#E1664C] transition-colors focus:outline-none focus:ring-2 focus:ring-[#E1664C] rounded"
                 >
-                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  {showPassword ? (
+                    <EyeOff className="h-5 w-5" />
+                  ) : (
+                    <Eye className="h-5 w-5" />
+                  )}
                 </button>
               </div>
             </div>

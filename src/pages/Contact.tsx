@@ -240,7 +240,7 @@ const ContactContent: React.FC = () => {
       }
 
       errorMessage +=
-        ". Please try again or contact us directly at support@neuralgo.com";
+        ". Please try again or contact us directly at neralgo06@gmail.com";
       setSubmitError(errorMessage);
     }
   };
@@ -436,7 +436,7 @@ const ContactContent: React.FC = () => {
                     </div>
                     <div>
                       <p className="text-white font-semibold">Email</p>
-                      <p className="text-white/70">support@neuralgo.com</p>
+                      <p className="text-white/70">neuralgo06@gmail.com</p>
                     </div>
                   </div>
                   <div className="flex items-center space-x-4">
